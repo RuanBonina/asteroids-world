@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="pt-BR">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Asteroides (Click)</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+
+<body>
+  <canvas id="c"></canvas>
+
+  <div id="hud"></div>
+
+  <button id="pauseBtn" class="iconBtn" type="button" title="Pausar" style="right:96px; display:none;">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+    </svg>
+  </button>
+
+  <button id="quitBtn" class="iconBtn" type="button" title="Encerrar partida" style="display:none;">
+    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+    </svg>
+  </button>
+
+  <button id="fsBtn" class="iconBtn" type="button" title="Tela cheia"></button>
+
+  <div id="startScreen">
+    <div id="panel">
+      <div id="startHeader">
+        <h1 id="title">Asteroides (Click)</h1>
+
+        <button id="customBtn" class="iconBtn startIcon" type="button" title="Personalizar" style="position:static;">
+          <!-- gear -->
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4Z" stroke="currentColor" stroke-width="2.2" />
+            <path
+              d="M19 12a7.3 7.3 0 0 0-.08-1l2.01-1.55-2-3.46-2.43.86a7.5 7.5 0 0 0-1.74-1.01L14.4 3h-4.8l-.36 2.84c-.62.25-1.2.58-1.74 1.01L5.07 6l-2 3.46L5.08 11A7.3 7.3 0 0 0 5 12c0 .34.03.67.08 1l-2.01 1.55 2 3.46 2.43-.86c.54.42 1.12.76 1.74 1.01L9.6 21h4.8l.36-2.84c.62-.25 1.2-.58 1.74-1.01l2.43.86 2-3.46L18.92 13c.05-.33.08-.66.08-1Z"
+              stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" />
+          </svg>
+        </button>
+      </div>
+
+      <p id="sub">Destrua o asteroide antes que ele fuja da tela.</p>
+
+      <div id="last"></div>
+
+      <button id="startBtn" class="btn" type="button">Iniciar</button>
+
+      <div id="rules">
+        • 1 hit kill • 1 asteroide por vez<br />
+        • Clique para destruir<br />
+        • <kbd>Esc</kbd> pausa/retoma • <kbd>X</kbd> encerra
+      </div>
+    </div>
+
+    <div id="customModal" style="display:none;">
+      <div id="customBackdrop"></div>
+
+      <div id="customCard" role="dialog" aria-modal="true" aria-labelledby="customTitle">
+        <div id="customHeader">
+          <div id="customTitle">Personalizar</div>
+
+          <button id="customCloseBtn" class="iconBtn" type="button" title="Fechar" style="position:static;">
+            <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+            </svg>
+          </button>
+        </div>
+
+        <div class="row">
+          <label for="opacityRange">Transparência UI</label>
+          <input id="opacityRange" type="range" min="10" max="100" step="10" value="100" />
+          <output id="opacityOut">100%</output>
+        </div>
+
+        <div class="row">
+          <label for="speedRange">Velocidade</label>
+          <input id="speedRange" type="range" min="1" max="5" step="1" value="3" />
+          <output id="speedOut">Nível 3</output>
+        </div>
+
+        <div class="row">
+          <label for="difficultyToggle">Dificuldade</label>
+          <input id="difficultyToggle" type="checkbox" />
+          <output id="difficultyOut">Ativa</output>
+        </div>
+
+        <button id="customApplyBtn" class="btn" type="button" style="margin-top:12px;">
+          Aplicar alterações
+        </button>
+
+        <div class="help">
+          Transparência afeta HUD/ícones/efeitos. Velocidade afeta o movimento do asteroide.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="confirmModal" style="display:none;">
+    <div id="confirmBackdrop"></div>
+
+    <div id="confirmCard" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <div id="confirmHeader">
+        <div id="confirmTitle">Encerrar partida?</div>
+
+        <button id="confirmCloseBtn" class="iconBtn" type="button" title="Fechar" style="position:static;">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+          </svg>
+        </button>
+      </div>
+
+      <div class="help" style="margin-top:0;">
+        Seu desempenho será salvo como “Última partida”.
+      </div>
+
+      <div style="display:flex; gap:10px; margin-top:12px;">
+        <button id="confirmCancelBtn" class="btn" type="button" style="margin-top:0; flex:1;">
+          Cancelar
+        </button>
+        <button id="confirmEndBtn" class="btn" type="button"
+          style="margin-top:0; flex:1; background: rgba(255,80,80,0.12); border-color: rgba(255,80,80,0.22);">
+          Encerrar
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+
+</html>
