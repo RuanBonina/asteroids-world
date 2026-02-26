@@ -1,0 +1,172 @@
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden; }
+canvas { display: block; background: #000; cursor: crosshair; }
+
+:root { --uiOpacity: 1; }
+
+#hud {
+  position: fixed; left: 12px; top: 10px; color: #d6d6d6;
+  font: 14px/1.2 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  user-select: none; pointer-events: none;
+  white-space: pre;
+  opacity: var(--uiOpacity);
+  z-index: 5;
+}
+
+.iconBtn {
+  position: fixed; top: 10px;
+  width: 36px; height: 36px;
+  display: grid; place-items: center;
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 12px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  padding: 0;
+  opacity: var(--uiOpacity);
+  z-index: 30;
+}
+.iconBtn:active { transform: translateY(1px); }
+.iconBtn svg { width: 18px; height: 18px; }
+
+#fsBtn { right: 12px; }
+#quitBtn { right: 54px; }
+
+#startScreen {
+  position: fixed; inset: 0;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 50% 40%, rgba(255,255,255,0.08), rgba(0,0,0,0.92) 55%, rgba(0,0,0,1));
+  color: #eaeaea;
+  font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  z-index: 20;
+}
+
+#panel {
+  width: min(520px, calc(100vw - 40px));
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  background: rgba(0,0,0,0.55);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.55);
+}
+
+#startHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.startIcon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+}
+
+#title { font-size: 22px; letter-spacing: 0.4px; margin: 0 0 6px; }
+#sub { color: #bdbdbd; margin: 0 0 12px; }
+
+#last {
+  color: #cfcfcf;
+  font-size: 13px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  margin: 10px 0 12px;
+  white-space: pre;
+}
+
+.btn {
+  width: 100%;
+  background: rgba(255,255,255,0.12);
+  color: #fff;
+  border: 1px solid rgba(255,255,255,0.22);
+  padding: 12px 14px;
+  border-radius: 14px;
+  font: 14px system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  cursor: pointer;
+  margin-top: 8px;
+}
+.btn:active { transform: translateY(1px); }
+
+#rules { color: #bdbdbd; font-size: 13px; margin-top: 10px; line-height: 1.35; }
+kbd {
+  font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  padding: 2px 6px;
+  border-radius: 8px;
+  color: #eaeaea;
+}
+
+/* Modal personalizar */
+#customModal { position: fixed; inset: 0; z-index: 40; }
+#customBackdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.75); }
+
+#customCard {
+  position: relative;
+  width: min(520px, calc(100vw - 40px));
+  margin: 0 auto;
+  top: 14vh;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 18px;
+  padding: 14px 14px 16px;
+  background: rgba(0,0,0,0.70);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.65);
+}
+
+#customHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+#customTitle { font-size: 16px; color: #eaeaea; }
+
+.row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 10px;
+  color: #d6d6d6;
+  font-size: 13px;
+}
+.row label { width: 140px; }    
+.row output { width: 80px; }        
+input[type="range"] { width: min(260px, 45vw); flex: 0 0 min(260px, 45vw); }
+
+.help { margin-top: 10px; color: #bdbdbd; font-size: 12px; line-height: 1.35; }
+
+.row input[type="checkbox"] {
+  width: 260px;
+  flex: 0 0 260px;
+  height: 18px;
+}
+
+/* Modal confirmar encerrar */
+#confirmModal { position: fixed; inset: 0; z-index: 45; }
+#confirmBackdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.75); }
+
+#confirmCard {
+  position: relative;
+  width: min(480px, calc(100vw - 40px));
+  margin: 0 auto;
+  top: 18vh;
+  border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 18px;
+  padding: 14px 14px 16px;
+  background: rgba(0,0,0,0.72);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.65);
+}
+
+#confirmHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+#confirmTitle { font-size: 16px; color: #eaeaea; }
