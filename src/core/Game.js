@@ -117,8 +117,12 @@ export class Game {
 
       els.fsBtn.innerHTML = Fullscreen.iconHTML();
       els.fsBtn.style.display = "grid";
+      els.quitBtn.style.right = "54px";
+      els.pauseBtn.style.right = "96px";
     } else {
       els.fsBtn.style.display = "none";
+      els.quitBtn.style.right = "12px";
+      els.pauseBtn.style.right = "54px";
     }
 
     closeModal();
@@ -258,7 +262,7 @@ export class Game {
     }
 
     this.confirmPending = true;
-    this.uiEls.confirmModal.style.display = "block";
+    this.uiEls.confirmModal.style.display = "grid";
 
     if (this.uiEls.customModal) this.uiEls.customModal.style.display = "none";
   }

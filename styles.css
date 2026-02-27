@@ -307,14 +307,22 @@ input[type="range"] { width: min(260px, 45vw); flex: 0 0 min(260px, 45vw); }
 }
 
 /* Modal confirmar encerrar */
-#confirmModal { position: fixed; inset: 0; z-index: 45; }
+#confirmModal {
+  position: fixed;
+  inset: 0;
+  z-index: 45;
+  display: grid;
+  place-items: center;
+  padding: 0 var(--screenGutter);
+  box-sizing: border-box;
+}
 #confirmBackdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.75); }
 
 #confirmCard {
   position: relative;
-  width: min(480px, calc(100vw - 40px));
-  margin: 0 auto;
-  top: 18vh;
+  width: min(480px, 100%);
+  margin: 0;
+  box-sizing: border-box;
   border: 1px solid rgba(255,255,255,0.16);
   border-radius: 18px;
   padding: 14px 14px 16px;
