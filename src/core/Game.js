@@ -71,13 +71,8 @@ export class Game {
     els.quitBtn.addEventListener("click", () => this.openConfirmEnd());
 
     // MODAL
-    const openModal = () => {
-      this.ui.beginDraftFromSettings();
-      els.customModal.style.display = "block";
-    };
-    const closeModal = () => {
-      els.customModal.style.display = "none";
-    };
+    const openModal = () => this.openCustomModal();
+    const closeModal = () => this.closeCustomModal();
 
     els.pauseBtn.addEventListener("click", () => this.togglePause());
     els.customBtn.addEventListener("click", openModal);
@@ -142,6 +137,17 @@ export class Game {
         <path d="M8 6l12 6-12 6V6z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
       </svg>`;
     this.uiEls.pauseBtn.title = "Retomar";
+  }
+
+  openCustomModal() {
+    this.ui.beginDraftFromSettings();
+    if (this.uiEls.panel) this.uiEls.panel.style.display = "none";
+    if (this.uiEls.customModal) this.uiEls.customModal.style.display = "block";
+  }
+
+  closeCustomModal() {
+    if (this.uiEls.customModal) this.uiEls.customModal.style.display = "none";
+    if (this.uiEls.panel) this.uiEls.panel.style.display = "";
   }
 
   start() {
