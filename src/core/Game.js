@@ -28,10 +28,12 @@ export class Game {
     );
     this.confirmPending = false;
     this.dynamicSpeedMul = 1;
+    this.stars = [];
     this.renderer = new Renderer({ ctx, hud }, this.settings);
     this.ui = new UIController(uiEls, this.settings, this.stats);
 
     this.uiEls = uiEls;
+    this.closeCustomHelpTooltips = () => {};
     this.state = "START";
     this.lastT = performance.now();
 
@@ -71,30 +73,34 @@ export class Game {
     els.quitBtn.addEventListener("click", () => this.openConfirmEnd());
 
     // MODAL
-    const openModal = () => {
-      this.ui.beginDraftFromSettings();
-      els.customModal.style.display = "block";
-    };
-    const closeModal = () => {
-      els.customModal.style.display = "none";
-    };
+    const openModal = () => this.openCustomModal();
+    const closeModal = () => this.closeCustomModal();
 
     els.pauseBtn.addEventListener("click", () => this.togglePause());
     els.customBtn.addEventListener("click", openModal);
     els.customCloseBtn.addEventListener("click", closeModal);
-    els.customBackdrop.addEventListener("click", closeModal);
+    this.bindCustomHelpTooltips();
 
     // SLIDERS (não aplicam direto; só atualizam o draft)
-    els.opacityRange.addEventListener("input", () =>
-      this.ui.updateDraftOpacityFromUI(),
-    );
-    els.speedRange.addEventListener("input", () =>
-      this.ui.updateDraftSpeedFromUI(),
-    );
+    const closeHints = () => this.closeCustomHelpTooltips();
 
-    els.difficultyToggle.addEventListener("input", () =>
-      this.ui.updateDraftDifficultyFromUI(),
-    );
+    els.opacityRange.addEventListener("touchstart", closeHints, { passive: true });
+    els.opacityRange.addEventListener("pointerdown", closeHints);
+    els.opacityRange.addEventListener("input", () => {
+      this.closeCustomHelpTooltips();
+      this.ui.updateDraftOpacityFromUI();
+    });
+    els.speedRange.addEventListener("touchstart", closeHints, { passive: true });
+    els.speedRange.addEventListener("pointerdown", closeHints);
+    els.speedRange.addEventListener("input", () => {
+      this.closeCustomHelpTooltips();
+      this.ui.updateDraftSpeedFromUI();
+    });
+
+    els.difficultyToggle.addEventListener("input", () => {
+      this.closeCustomHelpTooltips();
+      this.ui.updateDraftDifficultyFromUI();
+    });
 
     // APPLY
     els.customApplyBtn.addEventListener("click", () => {
@@ -102,17 +108,31 @@ export class Game {
       closeModal();
     });
 
-    // FULLSCREEN
-    els.fsBtn.addEventListener("click", async () => {
-      await Fullscreen.toggle();
-    });
+    // FULLSCREEN (somente web desktop)
+    const touchLikeDevice =
+      /Android|iPhone|iPad|iPod|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+      (window.matchMedia && window.matchMedia("(hover: none) and (pointer: coarse)").matches);
+    const fullscreenAvailable = !!document.documentElement.requestFullscreen;
 
-    document.addEventListener("fullscreenchange", () => {
+    if (!touchLikeDevice && fullscreenAvailable) {
+      els.fsBtn.addEventListener("click", async () => {
+        await Fullscreen.toggle();
+      });
+
+      document.addEventListener("fullscreenchange", () => {
+        els.fsBtn.innerHTML = Fullscreen.iconHTML();
+        this.resize();
+      });
+
       els.fsBtn.innerHTML = Fullscreen.iconHTML();
-      this.resize();
-    });
-
-    els.fsBtn.innerHTML = Fullscreen.iconHTML();
+      els.fsBtn.style.display = "grid";
+      els.quitBtn.style.right = "54px";
+      els.pauseBtn.style.right = "96px";
+    } else {
+      els.fsBtn.style.display = "none";
+      els.quitBtn.style.right = "12px";
+      els.pauseBtn.style.right = "54px";
+    }
 
     closeModal();
   }
@@ -126,6 +146,83 @@ export class Game {
     this.canvas.style.width = this.w + "px";
     this.canvas.style.height = this.h + "px";
     this.ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    if (this.state === "PLAYING") this.generateStars();
+  }
+
+  generateStars() {
+    const count = Math.max(80, Math.floor((this.w * this.h) / 12000));
+    this.stars = Array.from({ length: count }, () => ({
+      x: Math.random() * this.w,
+      y: Math.random() * this.h,
+      size: Math.random() < 0.82 ? 1 : 2,
+      a: 0.35 + Math.random() * 0.55,
+    }));
+  }
+
+  setPauseButtonPausedUI() {
+    if (!this.uiEls.pauseBtn) return;
+    this.uiEls.pauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+          <path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>`;
+    this.uiEls.pauseBtn.title = "Pausar";
+  }
+
+  setPauseButtonPlayUI() {
+    if (!this.uiEls.pauseBtn) return;
+    this.uiEls.pauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M8 6l12 6-12 6V6z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+      </svg>`;
+    this.uiEls.pauseBtn.title = "Retomar";
+  }
+
+  openCustomModal() {
+    this.ui.beginDraftFromSettings();
+    this.closeCustomHelpTooltips();
+    if (this.uiEls.panel) this.uiEls.panel.style.display = "none";
+    if (this.uiEls.customModal) this.uiEls.customModal.style.display = "grid";
+  }
+
+  closeCustomModal() {
+    this.closeCustomHelpTooltips();
+    if (this.uiEls.customModal) this.uiEls.customModal.style.display = "none";
+    if (this.uiEls.panel) this.uiEls.panel.style.display = "";
+  }
+
+  bindCustomHelpTooltips() {
+    const root = this.uiEls.customCard;
+    if (!root) return;
+
+    this.helpHintButtons = Array.from(root.querySelectorAll(".hintBtn"));
+    this.closeCustomHelpTooltips = () => {
+      this.helpHintButtons.forEach((btn) => {
+        btn.classList.remove("is-open");
+        btn.blur();
+      });
+    };
+
+    this.helpHintButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const shouldOpen = !btn.classList.contains("is-open");
+        this.closeCustomHelpTooltips();
+        if (shouldOpen) btn.classList.add("is-open");
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!this.uiEls.customModal || this.uiEls.customModal.style.display === "none") return;
+      if (root.contains(e.target)) return;
+      this.closeCustomHelpTooltips();
+    });
+
+    document.addEventListener("touchstart", (e) => {
+      if (!this.uiEls.customModal || this.uiEls.customModal.style.display === "none") return;
+      if (e.target.closest(".hintBtn")) return;
+      const hasOpenHint = this.helpHintButtons.some((btn) => btn.classList.contains("is-open"));
+      if (!hasOpenHint) return;
+      this.closeCustomHelpTooltips();
+    }, { passive: true });
   }
 
   start() {
@@ -133,12 +230,14 @@ export class Game {
     this.particles.clear();
     this.asteroids.clear();
     this.dynamicSpeedMul = 1;
+    this.generateStars();
 
     this.clock.start(performance.now());
     this.state = "PLAYING";
     this.ui.hideStart();
 
     this.uiEls.pauseBtn.style.display = "grid";
+    this.setPauseButtonPausedUI();
   }
 
   end() {
@@ -156,11 +255,13 @@ export class Game {
 
     this.particles.clear();
     this.asteroids.clear();
+    this.stars = [];
 
     this.state = "START";
     this.ui.showStart();
 
     this.uiEls.pauseBtn.style.display = "none";
+    this.setPauseButtonPausedUI();
   }
 
   openConfirmEnd() {
@@ -169,17 +270,11 @@ export class Game {
 
     if (!this.clock.paused) {
       this.clock.togglePause(performance.now());
-
-      if (this.uiEls.pauseBtn) {
-        this.uiEls.pauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M8 6l12 6-12 6V6z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
-      </svg>`;
-        this.uiEls.pauseBtn.title = "Retomar";
-      }
+      this.setPauseButtonPlayUI();
     }
 
     this.confirmPending = true;
-    this.uiEls.confirmModal.style.display = "block";
+    this.uiEls.confirmModal.style.display = "grid";
 
     if (this.uiEls.customModal) this.uiEls.customModal.style.display = "none";
   }
@@ -190,12 +285,7 @@ export class Game {
 
     if (this.state === "PLAYING" && this.clock.paused) {
       this.clock.togglePause(performance.now());
-      if (this.uiEls.pauseBtn) {
-        this.uiEls.pauseBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-        <path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-      </svg>`;
-        this.uiEls.pauseBtn.title = "Pausar";
-      }
+      this.setPauseButtonPausedUI();
     }
   }
 
@@ -203,16 +293,8 @@ export class Game {
     if (this.state !== "PLAYING") return;
     if (this.confirmPending) return;
     this.clock.togglePause(performance.now());
-
-    this.uiEls.pauseBtn.innerHTML = this.clock.paused
-      ? `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M8 6l12 6-12 6V6z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
-          </svg>` // play
-      : `<svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-          <path d="M8 6v12M16 6v12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-          </svg>`; // pause
-
-    this.uiEls.pauseBtn.title = this.clock.paused ? "Retomar" : "Pausar";
+    if (this.clock.paused) this.setPauseButtonPlayUI();
+    else this.setPauseButtonPausedUI();
   }
 
   update(dt) {
@@ -251,6 +333,7 @@ export class Game {
 
   render(now) {
     this.renderer.clear(this.w, this.h);
+    if (this.state === "PLAYING") this.renderer.drawStars(this.stars);
     this.renderer.drawAsteroid(this.asteroids.asteroid);
     this.renderer.drawParticles(this.particles.particles);
     this.renderer.drawRings(this.particles.rings);

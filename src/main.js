@@ -13,10 +13,10 @@ const uiEls = {
   panel: document.getElementById("panel"),
   startBtn: document.getElementById("startBtn"),
   customBtn: document.getElementById("customBtn"),
+  versionBox: document.getElementById("version"),
   lastBox: document.getElementById("last"),
 
   customModal: document.getElementById("customModal"),
-  customBackdrop: document.getElementById("customBackdrop"),
   customCard: document.getElementById("customCard"),
   customCloseBtn: document.getElementById("customCloseBtn"),
   customApplyBtn: document.getElementById("customApplyBtn"),
@@ -33,7 +33,6 @@ const uiEls = {
   confirmEndBtn: document.getElementById("confirmEndBtn"),
 
   difficultyToggle: document.getElementById("difficultyToggle"),
-  difficultyOut: document.getElementById("difficultyOut"),
 };
 
 new Game({ canvas, ctx, hud, uiEls });

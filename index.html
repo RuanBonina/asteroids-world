@@ -4,7 +4,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Asteroides (Click)</title>
+  <title>Asteroids World</title>
   <link rel="stylesheet" href="./styles.css" />
   <link rel="manifest" href="./manifest.webmanifest">
   <meta name="theme-color" content="#000000">
@@ -32,7 +32,7 @@
   <div id="startScreen">
     <div id="panel">
       <div id="startHeader">
-        <h1 id="title">Asteroides (Click)</h1>
+        <h1 id="title">Asteroids World</h1>
 
         <button id="customBtn" class="iconBtn startIcon" type="button" title="Personalizar" style="position:static;">
           <!-- gear -->
@@ -46,7 +46,6 @@
       </div>
 
       <p id="sub">Destrua o asteroide antes que ele fuja da tela.</p>
-
       <div id="last"></div>
 
       <button id="startBtn" class="btn" type="button">Iniciar</button>
@@ -58,45 +57,61 @@
       </div>
     </div>
 
-    <div id="customModal" style="display:none;">
-      <div id="customBackdrop"></div>
 
+    <div id="version">Versão --</div>
+    <div id="customModal" style="display:none;">
       <div id="customCard" role="dialog" aria-modal="true" aria-labelledby="customTitle">
         <div id="customHeader">
           <div id="customTitle">Personalizar</div>
 
-          <button id="customCloseBtn" class="iconBtn" type="button" title="Fechar" style="position:static;">
+          <button id="customCloseBtn" class="btn backBtn" type="button" title="Voltar" aria-label="Voltar">
             <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
-              <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" />
+              <path d="M15 6l-6 6 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" />
             </svg>
           </button>
         </div>
 
         <div class="row">
-          <label for="opacityRange">Transparência UI</label>
-          <input id="opacityRange" type="range" min="10" max="100" step="10" value="100" />
+          <div class="fieldLabel">
+            <label for="opacityRange">Transparência UI</label>
+            <button class="hintBtn" type="button" aria-label="Ajuda sobre transparencia" aria-describedby="hintOpacity">?</button>
+            <div id="hintOpacity" class="hintBox" role="tooltip">
+              Controla a opacidade do HUD, icones e botoes da interface.
+            </div>
+          </div>
+          <input id="opacityRange" type="range" min="20" max="100" step="20" value="100" />
           <output id="opacityOut">100%</output>
         </div>
 
         <div class="row">
-          <label for="speedRange">Velocidade</label>
+          <div class="fieldLabel">
+            <label for="speedRange">Velocidade</label>
+            <button class="hintBtn" type="button" aria-label="Ajuda sobre velocidade" aria-describedby="hintSpeed">?</button>
+            <div id="hintSpeed" class="hintBox" role="tooltip">
+              Define o ritmo base do movimento do asteroide durante a partida.
+            </div>
+          </div>
           <input id="speedRange" type="range" min="1" max="5" step="1" value="3" />
           <output id="speedOut">Nível 3</output>
         </div>
 
-        <div class="row">
-          <label for="difficultyToggle">Dificuldade</label>
-          <input id="difficultyToggle" type="checkbox" />
-          <output id="difficultyOut">Ativa</output>
+        <div class="row rowToggle">
+          <div class="fieldLabel">
+            <label for="difficultyToggle">Dificuldade</label>
+            <button class="hintBtn" type="button" aria-label="Ajuda sobre dificuldade" aria-describedby="hintDifficulty">?</button>
+            <div id="hintDifficulty" class="hintBox" role="tooltip">
+              Quando ativa, a velocidade do asteroide cresce com o tempo da rodada.
+            </div>
+          </div>
+          <label class="switch" for="difficultyToggle" aria-label="Alternar dificuldade progressiva">
+            <input id="difficultyToggle" type="checkbox" />
+            <span class="slider" aria-hidden="true"></span>
+          </label>
         </div>
 
         <button id="customApplyBtn" class="btn" type="button" style="margin-top:12px;">
           Aplicar alterações
         </button>
-
-        <div class="help">
-          Transparência afeta HUD/ícones/efeitos. Velocidade afeta o movimento do asteroide.
-        </div>
       </div>
     </div>
   </div>
@@ -133,6 +148,5 @@
 
   <script type="module" src="./src/main.js"></script>
 </body>
-
 
 </html>

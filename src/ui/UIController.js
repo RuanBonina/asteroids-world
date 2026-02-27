@@ -13,6 +13,7 @@ export class UIController {
     };
 
     this.refreshLastResult();
+    this.refreshVersion();
   }
 
   showStart() {
@@ -49,8 +50,8 @@ export class UIController {
 
   syncFromSettings() {
     const op = clamp(
-      Math.round((this.settings.value.uiOpacity * 100) / 10) * 10,
-      10,
+      Math.round((this.settings.value.uiOpacity * 100) / 20) * 20,
+      20,
       100,
     );
     this.els.opacityRange.value = String(op);
@@ -62,17 +63,16 @@ export class UIController {
 
     const on = !!this.settings.value.difficultyProgression;
     this.els.difficultyToggle.checked = on;
-    this.els.difficultyOut.textContent = on ? "Ativa" : "Desligada";
   }
 
   beginDraftFromSettings() {
     this.draft.uiOpacity = this.settings.value.uiOpacity;
     this.draft.speedLevel = this.settings.value.asteroidSpeedLevel;
 
-    // reflete no modal
+    // Reflete no modal
     const op = clamp(
-      Math.round((this.settings.value.uiOpacity * 100) / 10) * 10,
-      10,
+      Math.round((this.settings.value.uiOpacity * 100) / 20) * 20,
+      20,
       100,
     );
     this.els.opacityRange.value = String(op);
@@ -84,18 +84,16 @@ export class UIController {
 
     const on = !!this.draft.difficultyProgression;
     this.els.difficultyToggle.checked = on;
-    this.els.difficultyOut.textContent = on ? "Ativa" : "Desligada";
   }
 
   updateDraftDifficultyFromUI() {
     const on = !!this.els.difficultyToggle.checked;
     this.draft.difficultyProgression = on;
-    this.els.difficultyOut.textContent = on ? "Ativa" : "Desligada";
   }
 
   updateDraftOpacityFromUI() {
-    const raw = Number(this.els.opacityRange.value); // 10..100, step 10
-    const v01 = clamp(raw / 100, 0.1, 1);
+    const raw = Number(this.els.opacityRange.value); // 20..100, step 20
+    const v01 = clamp(raw / 100, 0.2, 1);
     this.draft.uiOpacity = v01;
     this.els.opacityOut.textContent = `${raw}%`;
   }
@@ -113,7 +111,25 @@ export class UIController {
       difficultyProgression: this.draft.difficultyProgression,
     });
 
-    // mantém UI consistente
+    // Mantém UI consistente
     this.syncFromSettings();
+  }
+
+  async refreshVersion() {
+    if (!this.els.versionBox) return;
+
+    try {
+      const res = await fetch(`./version.json?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`version.json status ${res.status}`);
+
+      const data = await res.json();
+      const version = data.version || "0.0.0";
+      const build = data.build ?? 0;
+      this.els.versionBox.textContent = `Versão ${version}+build.${build}`;
+    } catch {
+      this.els.versionBox.textContent = "Versão local";
+    }
   }
 }
