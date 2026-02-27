@@ -34,7 +34,6 @@ const uiEls = {
   confirmEndBtn: document.getElementById("confirmEndBtn"),
 
   difficultyToggle: document.getElementById("difficultyToggle"),
-  difficultyOut: document.getElementById("difficultyOut"),
 };
 
 new Game({ canvas, ctx, hud, uiEls });

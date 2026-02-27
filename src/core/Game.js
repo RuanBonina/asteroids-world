@@ -32,6 +32,7 @@ export class Game {
     this.ui = new UIController(uiEls, this.settings, this.stats);
 
     this.uiEls = uiEls;
+    this.closeCustomHelpTooltips = () => {};
     this.state = "START";
     this.lastT = performance.now();
 
@@ -78,6 +79,7 @@ export class Game {
     els.customBtn.addEventListener("click", openModal);
     els.customCloseBtn.addEventListener("click", closeModal);
     els.customBackdrop.addEventListener("click", closeModal);
+    this.bindCustomHelpTooltips();
 
     // SLIDERS (não aplicam direto; só atualizam o draft)
     els.opacityRange.addEventListener("input", () =>
@@ -141,13 +143,49 @@ export class Game {
 
   openCustomModal() {
     this.ui.beginDraftFromSettings();
+    this.closeCustomHelpTooltips();
     if (this.uiEls.panel) this.uiEls.panel.style.display = "none";
     if (this.uiEls.customModal) this.uiEls.customModal.style.display = "block";
   }
 
   closeCustomModal() {
+    this.closeCustomHelpTooltips();
     if (this.uiEls.customModal) this.uiEls.customModal.style.display = "none";
     if (this.uiEls.panel) this.uiEls.panel.style.display = "";
+  }
+
+  bindCustomHelpTooltips() {
+    const root = this.uiEls.customCard;
+    if (!root) return;
+
+    this.helpHintButtons = Array.from(root.querySelectorAll(".hintBtn"));
+    this.closeCustomHelpTooltips = () => {
+      this.helpHintButtons.forEach((btn) => btn.classList.remove("is-open"));
+    };
+
+    this.helpHintButtons.forEach((btn) => {
+      btn.addEventListener("click", (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const shouldOpen = !btn.classList.contains("is-open");
+        this.closeCustomHelpTooltips();
+        if (shouldOpen) btn.classList.add("is-open");
+      });
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!this.uiEls.customModal || this.uiEls.customModal.style.display !== "block") return;
+      if (root.contains(e.target)) return;
+      this.closeCustomHelpTooltips();
+    });
+
+    document.addEventListener("touchstart", (e) => {
+      if (!this.uiEls.customModal || this.uiEls.customModal.style.display !== "block") return;
+      if (e.target.closest(".hintBtn")) return;
+      const hasOpenHint = this.helpHintButtons.some((btn) => btn.classList.contains("is-open"));
+      if (!hasOpenHint) return;
+      this.closeCustomHelpTooltips();
+    }, { passive: true });
   }
 
   start() {

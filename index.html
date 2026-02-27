@@ -74,33 +74,46 @@
         </div>
 
         <div class="row">
-          <label for="opacityRange">Transparência UI</label>
+          <div class="fieldLabel">
+            <label for="opacityRange">Transparencia UI</label>
+            <button class="hintBtn" type="button" aria-label="Ajuda sobre transparencia" aria-describedby="hintOpacity">?</button>
+            <div id="hintOpacity" class="hintBox" role="tooltip">
+              Controla a opacidade do HUD, icones e botoes da interface.
+            </div>
+          </div>
           <input id="opacityRange" type="range" min="10" max="100" step="10" value="100" />
           <output id="opacityOut">100%</output>
         </div>
 
         <div class="row">
-          <label for="speedRange">Velocidade</label>
+          <div class="fieldLabel">
+            <label for="speedRange">Velocidade</label>
+            <button class="hintBtn" type="button" aria-label="Ajuda sobre velocidade" aria-describedby="hintSpeed">?</button>
+            <div id="hintSpeed" class="hintBox" role="tooltip">
+              Define o ritmo base do movimento do asteroide durante a partida.
+            </div>
+          </div>
           <input id="speedRange" type="range" min="1" max="5" step="1" value="3" />
           <output id="speedOut">Nível 3</output>
         </div>
 
         <div class="row rowToggle">
-          <label for="difficultyToggle">Dificuldade</label>
+          <div class="fieldLabel">
+            <label for="difficultyToggle">Dificuldade</label>
+            <button class="hintBtn" type="button" aria-label="Ajuda sobre dificuldade" aria-describedby="hintDifficulty">?</button>
+            <div id="hintDifficulty" class="hintBox" role="tooltip">
+              Quando ativa, a velocidade do asteroide cresce com o tempo da rodada.
+            </div>
+          </div>
           <label class="switch" for="difficultyToggle" aria-label="Alternar dificuldade progressiva">
             <input id="difficultyToggle" type="checkbox" />
             <span class="slider" aria-hidden="true"></span>
           </label>
-          <output id="difficultyOut">Ativa</output>
         </div>
 
         <button id="customApplyBtn" class="btn" type="button" style="margin-top:12px;">
           Aplicar alterações
         </button>
-
-        <div class="help">
-          Transparência afeta HUD/ícones/efeitos. Velocidade afeta o movimento do asteroide.
-        </div>
       </div>
     </div>
   </div>
@@ -137,6 +150,5 @@
 
   <script type="module" src="./src/main.js"></script>
 </body>
-
 
 </html>

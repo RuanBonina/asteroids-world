@@ -63,7 +63,6 @@ export class UIController {
 
     const on = !!this.settings.value.difficultyProgression;
     this.els.difficultyToggle.checked = on;
-    this.els.difficultyOut.textContent = on ? "Ativa" : "Desligada";
   }
 
   beginDraftFromSettings() {
@@ -85,13 +84,11 @@ export class UIController {
 
     const on = !!this.draft.difficultyProgression;
     this.els.difficultyToggle.checked = on;
-    this.els.difficultyOut.textContent = on ? "Ativa" : "Desligada";
   }
 
   updateDraftDifficultyFromUI() {
     const on = !!this.els.difficultyToggle.checked;
     this.draft.difficultyProgression = on;
-    this.els.difficultyOut.textContent = on ? "Ativa" : "Desligada";
   }
 
   updateDraftOpacityFromUI() {
