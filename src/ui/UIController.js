@@ -13,6 +13,7 @@ export class UIController {
     };
 
     this.refreshLastResult();
+    this.refreshVersion();
   }
 
   showStart() {
@@ -69,7 +70,7 @@ export class UIController {
     this.draft.uiOpacity = this.settings.value.uiOpacity;
     this.draft.speedLevel = this.settings.value.asteroidSpeedLevel;
 
-    // reflete no modal
+    // Reflete no modal
     const op = clamp(
       Math.round((this.settings.value.uiOpacity * 100) / 10) * 10,
       10,
@@ -113,7 +114,25 @@ export class UIController {
       difficultyProgression: this.draft.difficultyProgression,
     });
 
-    // mantém UI consistente
+    // Mantém UI consistente
     this.syncFromSettings();
+  }
+
+  async refreshVersion() {
+    if (!this.els.versionBox) return;
+
+    try {
+      const res = await fetch(`./version.json?ts=${Date.now()}`, {
+        cache: "no-store",
+      });
+      if (!res.ok) throw new Error(`version.json status ${res.status}`);
+
+      const data = await res.json();
+      const version = data.version || "0.0.0";
+      const build = data.build ?? 0;
+      this.els.versionBox.textContent = `Versão ${version}+build.${build}`;
+    } catch {
+      this.els.versionBox.textContent = "Versão local";
+    }
   }
 }

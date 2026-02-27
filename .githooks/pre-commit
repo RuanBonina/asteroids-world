@@ -1,0 +1,4 @@
+#!/bin/sh
+
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "./scripts/update-version.ps1"
+git add version.json

@@ -66,6 +66,12 @@ canvas { display: block; background: #000; cursor: crosshair; }
 
 #title { font-size: 22px; letter-spacing: 0.4px; margin: 0 0 6px; }
 #sub { color: #bdbdbd; margin: 0 0 12px; }
+#version {
+  color: #9f9f9f;
+  font-size: 12px;
+  letter-spacing: 0.2px;
+  margin: -4px 0 10px;
+}
 
 #last {
   color: #cfcfcf;

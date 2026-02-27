@@ -13,6 +13,7 @@ const uiEls = {
   panel: document.getElementById("panel"),
   startBtn: document.getElementById("startBtn"),
   customBtn: document.getElementById("customBtn"),
+  versionBox: document.getElementById("version"),
   lastBox: document.getElementById("last"),
 
   customModal: document.getElementById("customModal"),
