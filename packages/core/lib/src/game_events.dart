@@ -45,6 +45,16 @@ class GameSettingsUpdatedRequested {
   final bool difficultyProgression;
 }
 
+class GameViewportChangedRequested {
+  const GameViewportChangedRequested({
+    required this.width,
+    required this.height,
+  });
+
+  final double width;
+  final double height;
+}
+
 class RenderFrameReady {
   const RenderFrameReady(this.frame);
 

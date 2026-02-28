@@ -5,7 +5,20 @@ import 'dart:ui' as ui;
 
 import 'package:asteroids_core/core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+const Color _bg = Color(0xFF000000);
+const Color _panel = Color(0xFF0D0E11);
+const Color _panelSoft = Color(0xFF121317);
+const Color _stroke = Color(0xFF2B2E36);
+const Color _text = Color(0xFFE5E7EB);
+const Color _muted = Color(0xFFB7BDC8);
+const double _settingsLabelWidth = 170;
+const double _overlayPanelMaxWidth = 560;
+const double _overlayPanelHeight = 430;
+const EdgeInsets _overlayPanelMargin = EdgeInsets.symmetric(horizontal: 18);
+const EdgeInsets _overlayPanelPadding = EdgeInsets.all(18);
 
 void main() {
   runApp(const MyApp());
@@ -19,7 +32,12 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Asteroids World',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF0A84FF)),
+        scaffoldBackgroundColor: _bg,
+        colorScheme: const ColorScheme.dark(
+          surface: _panel,
+          primary: _text,
+          onPrimary: _bg,
+        ),
       ),
       home: const ShellScreen(),
     );
@@ -67,13 +85,21 @@ class _ShellScreenState extends State<ShellScreen> {
     paused: false,
   );
   RunStatsSnapshot? _lastResult;
-  String _lastFact = 'none';
 
   double _uiOpacity = 1;
   int _speedLevel = 3;
   bool _difficultyProgression = true;
   bool _showCustomize = false;
   bool _showQuitConfirm = false;
+  Size? _lastViewportSent;
+  List<_Star> _stars = const <_Star>[];
+  List<_MissPulse> _missPulses = const <_MissPulse>[];
+  List<_UiParticle> _hitParticles = const <_UiParticle>[];
+  Timer? _fxTimer;
+  int _lastFxTickMs = 0;
+  bool _isPausedUi = false;
+  bool _isFullscreen = false;
+  _HelpDialogData? _helpDialog;
 
   @override
   void initState() {
@@ -120,26 +146,24 @@ class _ShellScreenState extends State<ShellScreen> {
         if (!mounted) {
           return;
         }
-        final state = (event as GameStateChanged).current;
-        setState(() => _state = state);
+        final changed = event as GameStateChanged;
+        final state = changed.current;
+        setState(() {
+          _state = state;
+          _isPausedUi = state == GameLifecycleState.paused;
+        });
       }),
-      _eventBus.subscribe(AsteroidDestroyed, (_) {
+      _eventBus.subscribe(HitMissed, (event) {
         if (!mounted) {
           return;
         }
-        setState(() => _lastFact = 'asteroid.destroyed');
+        _spawnMissFeedback(event as HitMissed);
       }),
-      _eventBus.subscribe(HitMissed, (_) {
+      _eventBus.subscribe(ParticlesRequested, (event) {
         if (!mounted) {
           return;
         }
-        setState(() => _lastFact = 'hit.missed');
-      }),
-      _eventBus.subscribe(AsteroidEscaped, (_) {
-        if (!mounted) {
-          return;
-        }
-        setState(() => _lastFact = 'asteroid.escaped');
+        _spawnHitParticles(event as ParticlesRequested);
       }),
       _eventBus.subscribe(StatsUpdated, (event) {
         if (!mounted) {
@@ -198,6 +222,7 @@ class _ShellScreenState extends State<ShellScreen> {
   @override
   void dispose() {
     _loopTimer?.cancel();
+    _fxTimer?.cancel();
     for (final sub in _subscriptions) {
       sub.cancel();
     }
@@ -206,10 +231,126 @@ class _ShellScreenState extends State<ShellScreen> {
   }
 
   void _onStart() {
+    final viewport = _lastViewportSent ?? MediaQuery.sizeOf(context);
+    setState(() {
+      _isPausedUi = false;
+      _stars = _generateStarfield(viewport);
+      _missPulses = const <_MissPulse>[];
+      _hitParticles = const <_UiParticle>[];
+    });
+    _eventBus.publish(
+      GameViewportChangedRequested(
+        width: viewport.width,
+        height: viewport.height,
+      ),
+    );
     _eventBus.publish(const GameStartRequested());
   }
 
+  void _spawnMissFeedback(HitMissed event) {
+    final pulse = _MissPulse(x: event.x, y: event.y, totalMs: 220, remainingMs: 220);
+    setState(() {
+      _missPulses = <_MissPulse>[..._missPulses, pulse];
+    });
+    _ensureFxLoop();
+  }
+
+  void _spawnHitParticles(ParticlesRequested event) {
+    if (event.kind != 'asteroid-hit') {
+      return;
+    }
+    final rng = Random(_seed ^ event.x.round() ^ event.y.round() ^ _clock.nowMs);
+    final spawned = <_UiParticle>[];
+    final count = 14 + rng.nextInt(8);
+    for (var i = 0; i < count; i++) {
+      final angle = rng.nextDouble() * pi * 2;
+      final speed = 70 + rng.nextDouble() * 180;
+      final life = 240 + rng.nextInt(260);
+      spawned.add(
+        _UiParticle(
+          x: event.x,
+          y: event.y,
+          vx: cos(angle) * speed,
+          vy: sin(angle) * speed,
+          size: 1.1 + rng.nextDouble() * 2.2,
+          totalMs: life,
+          remainingMs: life,
+        ),
+      );
+    }
+    setState(() {
+      _hitParticles = <_UiParticle>[..._hitParticles, ...spawned];
+    });
+    _ensureFxLoop();
+  }
+
+  void _ensureFxLoop() {
+    if (_fxTimer != null) {
+      return;
+    }
+    _lastFxTickMs = _clock.nowMs;
+    _fxTimer = Timer.periodic(const Duration(milliseconds: 16), _tickFx);
+  }
+
+  void _tickFx(Timer timer) {
+    if (!mounted) {
+      timer.cancel();
+      _fxTimer = null;
+      return;
+    }
+    if (_hitParticles.isEmpty && _missPulses.isEmpty) {
+      timer.cancel();
+      _fxTimer = null;
+      return;
+    }
+    final now = _clock.nowMs;
+    final dtMs = (now - _lastFxTickMs).clamp(1, 50);
+    _lastFxTickMs = now;
+    final dtSec = dtMs / 1000.0;
+
+    final nextParticles = <_UiParticle>[];
+    for (final p in _hitParticles) {
+      final left = p.remainingMs - dtMs;
+      if (left <= 0) {
+        continue;
+      }
+      nextParticles.add(
+        _UiParticle(
+          x: p.x + (p.vx * dtSec),
+          y: p.y + (p.vy * dtSec),
+          vx: p.vx * 0.97,
+          vy: (p.vy * 0.97) + (12 * dtSec),
+          size: p.size,
+          totalMs: p.totalMs,
+          remainingMs: left,
+        ),
+      );
+    }
+
+    final nextPulses = <_MissPulse>[];
+    for (final pulse in _missPulses) {
+      final left = pulse.remainingMs - dtMs;
+      if (left <= 0) {
+        continue;
+      }
+      nextPulses.add(
+        _MissPulse(
+          x: pulse.x,
+          y: pulse.y,
+          totalMs: pulse.totalMs,
+          remainingMs: left,
+        ),
+      );
+    }
+
+    setState(() {
+      _hitParticles = nextParticles;
+      _missPulses = nextPulses;
+    });
+  }
+
   void _onPauseToggle() {
+    setState(() => _isPausedUi = !_isPausedUi);
     _eventBus.publish(const GamePauseToggleRequested());
   }
 
@@ -252,6 +393,18 @@ class _ShellScreenState extends State<ShellScreen> {
     }
   }
 
+  Future<void> _toggleFullscreen() async {
+    final next = !_isFullscreen;
+    if (next) {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+    } else {
+      await SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    }
+    if (mounted) {
+      setState(() => _isFullscreen = next);
+    }
+  }
+
   Future<void> _applySettings() async {
     _publishSettings();
     await _saveSettings();
@@ -266,6 +419,43 @@ class _ShellScreenState extends State<ShellScreen> {
         timestampMs: _clock.nowMs,
       ),
     );
+  }
+
+  void _syncViewport(Size size) {
+    if (_engine == null) {
+      return;
+    }
+    if (_lastViewportSent != null &&
+        (_lastViewportSent!.width - size.width).abs() < 0.5 &&
+        (_lastViewportSent!.height - size.height).abs() < 0.5) {
+      return;
+    }
+    _lastViewportSent = size;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _eventBus.publish(
+        GameViewportChangedRequested(
+          width: size.width,
+          height: size.height,
+        ),
+      );
+    });
+  }
+
+  List<_Star> _generateStarfield(Size size) {
+    final rng = Random(_seed ^ _clock.nowMs);
+    final count = (size.width * size.height / 12000).clamp(80, 180).toInt();
+    final out = <_Star>[];
+    for (var i = 0; i < count; i++) {
+      out.add(
+        _Star(
+          x: rng.nextDouble() * size.width,
+          y: rng.nextDouble() * size.height,
+          radius: rng.nextDouble() < 0.82 ? 0.9 : 1.4,
+          alpha: 0.25 + rng.nextDouble() * 0.55,
+        ),
+      );
+    }
+    return out;
   }
 
   String _lastResultText() {
@@ -287,152 +477,202 @@ class _ShellScreenState extends State<ShellScreen> {
   Widget build(BuildContext context) {
     if (!_ready) {
       return Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: _bg,
         body: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
-            children: const <Widget>[
-              CircularProgressIndicator(),
+            children: <Widget>[
+              const CircularProgressIndicator(color: _text),
               SizedBox(height: 12),
-              Text('Carregando...', style: TextStyle(color: Colors.white)),
+              Text('Carregando...', style: const TextStyle(color: _muted)),
             ],
           ),
         ),
       );
     }
 
-    final showStart = _state == GameLifecycleState.idle || _state == GameLifecycleState.quit;
+    final showCustomize = _showCustomize;
+    final showStart = !showCustomize &&
+        (_state == GameLifecycleState.idle || _state == GameLifecycleState.quit);
     return Scaffold(
-      backgroundColor: Colors.black,
-      body: Stack(
-        children: <Widget>[
-          Positioned.fill(
-            child: GestureDetector(
-              onTapDown: _publishPointer,
-              child: CustomPaint(
-                painter: _FramePainter(_frame),
-                child: const SizedBox.expand(),
-              ),
-            ),
-          ),
-          Positioned(
-            top: 16,
-            left: 12,
-            right: 12,
-            child: Opacity(
-              opacity: _uiOpacity,
-              child: _HudBar(stats: _stats, lastFact: _lastFact),
-            ),
-          ),
-          if (!showStart)
-            Positioned(
-              top: 16,
-              right: 12,
-              child: Opacity(
-                opacity: _uiOpacity,
-                child: Row(
-                  children: <Widget>[
-                    _IconPill(icon: Icons.pause, onTap: _onPauseToggle),
-                    const SizedBox(width: 8),
-                    _IconPill(icon: Icons.close, onTap: _onQuitRequested),
-                  ],
+      backgroundColor: _bg,
+      body: LayoutBuilder(
+        builder: (context, constraints) {
+          _syncViewport(Size(constraints.maxWidth, constraints.maxHeight));
+          return Stack(
+            children: <Widget>[
+              Positioned.fill(
+                child: GestureDetector(
+                  onTapDown: _publishPointer,
+                  child: CustomPaint(
+                    painter: _FramePainter(_frame, _stars, _hitParticles, _missPulses),
+                    child: const SizedBox.expand(),
+                  ),
                 ),
               ),
-            ),
-          if (showStart) _buildStartOverlay(),
-          if (_showCustomize) _buildSettingsModal(),
-          if (_showQuitConfirm) _buildQuitConfirmModal(),
-        ],
+              if (!showStart && !showCustomize)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Opacity(
+                    opacity: _uiOpacity,
+                    child: _HudBar(stats: _stats),
+                  ),
+                ),
+              if (!showStart && !showCustomize)
+                Positioned(
+                  top: 16,
+                  right: 12,
+                  child: Opacity(
+                    opacity: _uiOpacity,
+                    child: Row(
+                      children: <Widget>[
+                        _IconPill(
+                          icon: _isPausedUi ? Icons.play_arrow : Icons.pause,
+                          onTap: _onPauseToggle,
+                          compact: true,
+                        ),
+                        const SizedBox(width: 8),
+                        _IconPill(icon: Icons.close, onTap: _onQuitRequested, compact: true),
+                        const SizedBox(width: 8),
+                        _IconPill(
+                          icon: _isFullscreen ? Icons.fullscreen_exit : Icons.fullscreen,
+                          onTap: _toggleFullscreen,
+                          compact: true,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (showStart) _buildStartOverlay(),
+              if (showCustomize) _buildSettingsModal(),
+              if (_showQuitConfirm) _buildQuitConfirmModal(),
+              if (_helpDialog != null) _buildHelpOverlay(_helpDialog!),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _overlayPanel({required Widget child}) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _overlayPanelMaxWidth),
+      child: Container(
+        margin: _overlayPanelMargin,
+        height: _overlayPanelHeight,
+        padding: _overlayPanelPadding,
+        decoration: BoxDecoration(
+          color: Colors.black.withValues(alpha: 0.82),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: _stroke, width: 1),
+        ),
+        child: child,
       ),
     );
   }
 
   Widget _buildStartOverlay() {
     return Positioned.fill(
-      child: Container(
-        color: Colors.black.withValues(alpha: 0.8),
-        alignment: Alignment.center,
-        child: Container(
-          width: 360,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: const Color(0xFF111827),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white24),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                children: <Widget>[
-                  const Expanded(
-                    child: Text(
-                      'Asteroids World',
-                      style: TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w700),
+      child: ColoredBox(
+        color: Colors.black.withValues(alpha: 0.75),
+        child: Align(
+          alignment: Alignment.center,
+          child: _overlayPanel(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: <Widget>[
+                    const Expanded(
+                      child: Text(
+                        'Asteroids World',
+                        style: TextStyle(color: _text, fontSize: 40, fontWeight: FontWeight.w700, height: 1),
+                      ),
+                    ),
+                    _IconPill(
+                      icon: Icons.settings,
+                      onTap: () => setState(() => _showCustomize = true),
+                      compact: true,
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  'Destrua o asteroide antes que ele fuja da tela.',
+                  style: TextStyle(color: _muted, fontSize: 24),
+                ),
+                const SizedBox(height: 14),
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: _panelSoft,
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: _stroke),
+                    ),
+                    child: SingleChildScrollView(
+                      child: Text(
+                        _lastResultText(),
+                        style: const TextStyle(color: _text, fontSize: 20, height: 1.35),
+                      ),
                     ),
                   ),
-                  _IconPill(
-                    icon: Icons.settings,
-                    onTap: () => setState(() => _showCustomize = true),
+                ),
+                const SizedBox(height: 14),
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _text,
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      side: const BorderSide(color: _stroke),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                      backgroundColor: const Color(0xFF17181C),
+                    ),
+                    onPressed: _onStart,
+                    child: const Text('Iniciar', style: TextStyle(fontSize: 22)),
                   ),
+                ),
+                const SizedBox(height: 10),
+                const Text(
+                  '- 1 hit kill • 1 asteroide por vez\n- Clique para destruir\n- Esc pausa/retoma • X encerra',
+                  style: TextStyle(color: _muted, height: 1.35, fontSize: 20),
+                ),
                 ],
               ),
-              const SizedBox(height: 8),
-              const Text(
-                'Destrua o asteroide antes que ele fuja da tela.',
-                style: TextStyle(color: Colors.white70),
-              ),
-              const SizedBox(height: 12),
-              Text(_lastResultText(), style: const TextStyle(color: Colors.white70)),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: FilledButton(
-                  onPressed: _onStart,
-                  child: const Text('Iniciar'),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Text(
-                '1 hit kill • 1 asteroide por vez\nClique para destruir\nEsc pausa/retoma • X encerra',
-                style: TextStyle(color: Colors.white54, height: 1.35),
-              ),
-            ],
+            ),
           ),
         ),
-      ),
-    );
+      );
   }
 
   Widget _buildSettingsModal() {
     return Positioned.fill(
       child: ColoredBox(
-        color: Colors.black.withValues(alpha: 0.7),
+        color: _bg,
         child: Center(
-          child: Container(
-            width: 380,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F172A),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white24),
-            ),
+          child: _overlayPanel(
             child: Column(
-              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Row(
                   children: <Widget>[
                     const Expanded(
                       child: Text(
                         'Personalizar',
-                        style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: _text, fontSize: 20, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    _IconPill(icon: Icons.arrow_back, onTap: () => setState(() => _showCustomize = false)),
+                    _IconPill(
+                      icon: Icons.arrow_back,
+                      onTap: () => setState(() => _showCustomize = false),
+                      compact: true,
+                    ),
                   ],
                 ),
-                const SizedBox(height: 14),
+                const SizedBox(height: 18),
                 _SliderRow(
                   label: 'Transparencia UI',
                   value: _uiOpacity * 100,
@@ -440,9 +680,14 @@ class _ShellScreenState extends State<ShellScreen> {
                   max: 100,
                   divisions: 4,
                   suffix: '${(_uiOpacity * 100).round()}%',
+                  onInfoTap: () => _showHelp(
+                    title: 'Transparencia UI',
+                    message:
+                        'Define o quao visiveis ficam os elementos da interface durante a partida.',
+                  ),
                   onChanged: (v) => setState(() => _uiOpacity = (v / 100).clamp(0.2, 1)),
                 ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 12),
                 _SliderRow(
                   label: 'Velocidade',
                   value: _speedLevel.toDouble(),
@@ -450,24 +695,112 @@ class _ShellScreenState extends State<ShellScreen> {
                   max: 5,
                   divisions: 4,
                   suffix: 'Nivel $_speedLevel',
+                  onInfoTap: () => _showHelp(
+                    title: 'Velocidade',
+                    message:
+                        'Controla a velocidade base dos asteroides. Nivel maior deixa o jogo mais rapido.',
+                  ),
                   onChanged: (v) => setState(() => _speedLevel = v.round().clamp(1, 5)),
                 ),
-                const SizedBox(height: 6),
-                SwitchListTile(
-                  value: _difficultyProgression,
-                  title: const Text('Dificuldade progressiva', style: TextStyle(color: Colors.white)),
-                  subtitle: const Text('A velocidade cresce com o tempo', style: TextStyle(color: Colors.white70)),
-                  onChanged: (v) => setState(() => _difficultyProgression = v),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    _FieldLabel(
+                      label: 'Escalar dificuldade',
+                      onInfoTap: () => _showHelp(
+                        title: 'Escalar dificuldade',
+                        message:
+                            'Quando ligado, a dificuldade aumenta ao longo do tempo da partida.',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.center,
+                        child: Switch(
+                          value: _difficultyProgression,
+                          activeThumbColor: Colors.white,
+                          activeTrackColor: const Color(0xFF178BDE),
+                          inactiveThumbColor: Colors.white,
+                          inactiveTrackColor: const Color(0xFF2A2D34),
+                          onChanged: (v) => setState(() => _difficultyProgression = v),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 72),
+                  ],
                 ),
-                const SizedBox(height: 10),
+                const Spacer(),
                 SizedBox(
                   width: double.infinity,
-                  child: FilledButton(
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: _text,
+                      backgroundColor: const Color(0xFF17181C),
+                      side: const BorderSide(color: _stroke),
+                      minimumSize: const Size.fromHeight(56),
+                      padding: const EdgeInsets.symmetric(vertical: 18),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
                     onPressed: _applySettings,
-                    child: const Text('Aplicar alteracoes'),
+                    child: const Text('Aplicar alteracoes', style: TextStyle(fontSize: 24)),
                   ),
                 ),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showHelp({required String title, required String message}) {
+    setState(() {
+      _helpDialog = _HelpDialogData(title: title, message: message);
+    });
+  }
+
+  void _closeHelp() {
+    if (_helpDialog == null) {
+      return;
+    }
+    setState(() => _helpDialog = null);
+  }
+
+  Widget _buildHelpOverlay(_HelpDialogData dialog) {
+    return Positioned.fill(
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: _closeHelp,
+        child: ColoredBox(
+          color: Colors.black.withValues(alpha: 0.45),
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 420),
+              margin: const EdgeInsets.symmetric(horizontal: 18),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: const Color(0xFF0F1116),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: _stroke),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    dialog.title,
+                    style: const TextStyle(color: _text, fontWeight: FontWeight.w700, fontSize: 18),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(dialog.message, style: const TextStyle(color: _muted, height: 1.35)),
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Toque em qualquer lugar para fechar.',
+                    style: TextStyle(color: _muted, fontSize: 12),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -484,9 +817,9 @@ class _ShellScreenState extends State<ShellScreen> {
             width: 340,
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
-              color: const Color(0xFF111827),
+              color: _panel,
               borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: Colors.white24),
+              border: Border.all(color: _stroke),
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
@@ -497,30 +830,38 @@ class _ShellScreenState extends State<ShellScreen> {
                     const Expanded(
                       child: Text(
                         'Encerrar partida?',
-                        style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w600),
+                        style: TextStyle(color: _text, fontSize: 18, fontWeight: FontWeight.w600),
                       ),
                     ),
-                    _IconPill(icon: Icons.close, onTap: _cancelQuit),
+                    _IconPill(icon: Icons.close, onTap: _cancelQuit, compact: true),
                   ],
                 ),
                 const SizedBox(height: 8),
                 const Text(
                   'Seu desempenho sera salvo como "Ultima partida".',
-                  style: TextStyle(color: Colors.white70),
+                  style: TextStyle(color: _muted),
                 ),
                 const SizedBox(height: 12),
                 Row(
                   children: <Widget>[
                     Expanded(
                       child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _text,
+                          side: const BorderSide(color: _stroke),
+                        ),
                         onPressed: _cancelQuit,
                         child: const Text('Cancelar'),
                       ),
                     ),
                     const SizedBox(width: 8),
                     Expanded(
-                      child: FilledButton(
-                        style: FilledButton.styleFrom(backgroundColor: const Color(0xFFEF4444)),
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _text,
+                          side: const BorderSide(color: _stroke),
+                          backgroundColor: const Color(0xFF2A1517),
+                        ),
                         onPressed: _confirmQuit,
                         child: const Text('Encerrar'),
                       ),
@@ -537,31 +878,15 @@ class _ShellScreenState extends State<ShellScreen> {
 }
 
 class _HudBar extends StatelessWidget {
-  const _HudBar({required this.stats, required this.lastFact});
+  const _HudBar({required this.stats});
 
   final RunStatsSnapshot stats;
-  final String lastFact;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.black.withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white24),
-      ),
-      child: Row(
-        children: <Widget>[
-          Expanded(
-            child: Text(
-              'Destroyed ${stats.hits} | Miss ${stats.misses} | Time ${stats.time.inSeconds}s',
-              style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-            ),
-          ),
-          Text(lastFact, style: const TextStyle(color: Colors.white70)),
-        ],
-      ),
+    return Text(
+      'Destruidos: ${stats.hits}\nFugas: ${stats.escaped}\nTempo: 00:${stats.time.inSeconds.toString().padLeft(2, '0')}\n${stats.paused ? "PAUSADO" : "ATIVO"}',
+      style: const TextStyle(color: _text, fontSize: 12, height: 1.25),
     );
   }
 }
@@ -575,6 +900,7 @@ class _SliderRow extends StatelessWidget {
     required this.divisions,
     required this.suffix,
     required this.onChanged,
+    this.onInfoTap,
   });
 
   final String label;
@@ -584,30 +910,36 @@ class _SliderRow extends StatelessWidget {
   final int divisions;
   final String suffix;
   final ValueChanged<double> onChanged;
+  final VoidCallback? onInfoTap;
 
   @override
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
+        const SizedBox(width: 0),
+        _FieldLabel(label: label, onInfoTap: onInfoTap),
+        const SizedBox(width: 12),
         Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(label, style: const TextStyle(color: Colors.white)),
-              Slider(
-                value: value,
-                min: min,
-                max: max,
-                divisions: divisions,
-                onChanged: onChanged,
-              ),
-            ],
+          child: SliderTheme(
+            data: SliderTheme.of(context).copyWith(
+              activeTrackColor: const Color(0xFF178BDE),
+              inactiveTrackColor: const Color(0xFF2B2E36),
+              thumbColor: const Color(0xFF178BDE),
+              overlayColor: const Color(0x33178BDE),
+            ),
+            child: Slider(
+              value: value,
+              min: min,
+              max: max,
+              divisions: divisions,
+              onChanged: onChanged,
+            ),
           ),
         ),
         const SizedBox(width: 8),
         SizedBox(
           width: 72,
-          child: Text(suffix, textAlign: TextAlign.right, style: const TextStyle(color: Colors.white70)),
+          child: Text(suffix, textAlign: TextAlign.right, style: const TextStyle(color: _muted)),
         ),
       ],
     );
@@ -615,26 +947,83 @@ class _SliderRow extends StatelessWidget {
 }
 
 class _IconPill extends StatelessWidget {
-  const _IconPill({required this.icon, required this.onTap});
+  const _IconPill({required this.icon, required this.onTap, this.compact = false});
 
   final IconData icon;
   final VoidCallback onTap;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
+    const radius = 14.0;
     return Material(
-      color: Colors.black.withValues(alpha: 0.4),
-      borderRadius: BorderRadius.circular(999),
+      color: const Color(0xFF121419),
+      borderRadius: BorderRadius.circular(radius),
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(999),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Icon(icon, color: Colors.white),
+        borderRadius: BorderRadius.circular(radius),
+        child: Container(
+          width: compact ? 42 : 48,
+          height: compact ? 42 : 48,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: _stroke),
+          ),
+          child: Icon(icon, color: _text, size: compact ? 19 : 22),
         ),
       ),
     );
   }
+}
+
+class _FieldLabel extends StatelessWidget {
+  const _FieldLabel({required this.label, this.onInfoTap});
+
+  final String label;
+  final VoidCallback? onInfoTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: _settingsLabelWidth,
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: _text),
+            ),
+          ),
+          const SizedBox(width: 6),
+          InkWell(
+            onTap: onInfoTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              width: 18,
+              height: 18,
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: const Color(0xFF191B21),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: _stroke),
+              ),
+              child: const Text('?', style: TextStyle(color: _muted, fontSize: 11, height: 1)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HelpDialogData {
+  const _HelpDialogData({required this.title, required this.message});
+
+  final String title;
+  final String message;
 }
 
 class _StopwatchClock implements Clock {
@@ -717,14 +1106,23 @@ class _MemoryStorage implements Storage {
 }
 
 class _FramePainter extends CustomPainter {
-  _FramePainter(this.frame);
+  _FramePainter(this.frame, this.stars, this.hitParticles, this.missPulses);
 
   final RenderFrame frame;
+  final List<_Star> stars;
+  final List<_UiParticle> hitParticles;
+  final List<_MissPulse> missPulses;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final bg = Paint()..color = const Color(0xFF030712);
+    final bg = Paint()..color = _bg;
     canvas.drawRect(Offset.zero & size, bg);
+
+    final starPaint = Paint()..style = PaintingStyle.fill;
+    for (final s in stars) {
+      starPaint.color = Colors.white.withValues(alpha: s.alpha);
+      canvas.drawCircle(Offset(s.x, s.y), s.radius, starPaint);
+    }
 
     final stroke = Paint()
       ..style = PaintingStyle.stroke
@@ -764,8 +1162,88 @@ class _FramePainter extends CustomPainter {
           break;
       }
     }
+
+    final particlePaint = Paint()..style = PaintingStyle.fill;
+    for (final p in hitParticles) {
+      final t = p.remainingMs / p.totalMs;
+      final alpha = (t.clamp(0, 1) * 255).toInt();
+      particlePaint.color = Color.fromARGB(alpha, 240, 240, 240);
+      canvas.drawCircle(Offset(p.x, p.y), p.size, particlePaint);
+    }
+
+    final pulseStroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.7;
+    for (final pulse in missPulses) {
+      final progress = 1 - (pulse.remainingMs / pulse.totalMs);
+      final alpha = ((1 - progress).clamp(0, 1) * 230).toInt();
+      pulseStroke.color = Color.fromARGB(alpha, 230, 90, 90);
+      canvas.drawCircle(Offset(pulse.x, pulse.y), 7 + (progress * 18), pulseStroke);
+      canvas.drawLine(
+        Offset(pulse.x - 5, pulse.y - 5),
+        Offset(pulse.x + 5, pulse.y + 5),
+        pulseStroke,
+      );
+      canvas.drawLine(
+        Offset(pulse.x + 5, pulse.y - 5),
+        Offset(pulse.x - 5, pulse.y + 5),
+        pulseStroke,
+      );
+    }
   }
 
   @override
-  bool shouldRepaint(covariant _FramePainter oldDelegate) => oldDelegate.frame != frame;
+  bool shouldRepaint(covariant _FramePainter oldDelegate) =>
+      oldDelegate.frame != frame ||
+      oldDelegate.stars != stars ||
+      oldDelegate.hitParticles != hitParticles ||
+      oldDelegate.missPulses != missPulses;
+}
+
+class _Star {
+  const _Star({
+    required this.x,
+    required this.y,
+    required this.radius,
+    required this.alpha,
+  });
+
+  final double x;
+  final double y;
+  final double radius;
+  final double alpha;
+}
+
+class _MissPulse {
+  const _MissPulse({
+    required this.x,
+    required this.y,
+    required this.totalMs,
+    required this.remainingMs,
+  });
+
+  final double x;
+  final double y;
+  final int totalMs;
+  final int remainingMs;
+}
+
+class _UiParticle {
+  const _UiParticle({
+    required this.x,
+    required this.y,
+    required this.vx,
+    required this.vy,
+    required this.size,
+    required this.totalMs,
+    required this.remainingMs,
+  });
+
+  final double x;
+  final double y;
+  final double vx;
+  final double vy;
+  final double size;
+  final int totalMs;
+  final int remainingMs;
 }

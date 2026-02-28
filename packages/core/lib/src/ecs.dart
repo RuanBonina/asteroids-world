@@ -36,6 +36,12 @@ class AsteroidTag {
   const AsteroidTag();
 }
 
+class AsteroidVisual {
+  const AsteroidVisual({required this.localPolygon});
+
+  final List<Vec2> localPolygon;
+}
+
 class EscapeBounds {
   const EscapeBounds({required this.padding});
 

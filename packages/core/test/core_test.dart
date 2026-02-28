@@ -375,6 +375,10 @@ void main() {
 
       final asteroid = asteroidsAfterSpawn.single;
       final t = world.getComponent<Transform>(asteroid)!;
+      final c = world.getComponent<ColliderCircle>(asteroid)!;
+      final spawnedOutside =
+          t.x <= -c.r || t.x >= 800 + c.r || t.y <= -c.r || t.y >= 600 + c.r;
+      expect(spawnedOutside, isTrue);
       eventBus.publish(
         InputPointerDown(
           x: t.x,
