@@ -3,11 +3,7 @@ library;
 import 'contracts.dart';
 
 class Transform {
-  Transform({
-    required this.x,
-    required this.y,
-    this.rot = 0,
-  });
+  Transform({required this.x, required this.y, this.rot = 0});
 
   double x;
   double y;
@@ -15,11 +11,7 @@ class Transform {
 }
 
 class Velocity {
-  Velocity({
-    required this.vx,
-    required this.vy,
-    this.angVel = 0,
-  });
+  Velocity({required this.vx, required this.vy, this.angVel = 0});
 
   double vx;
   double vy;
@@ -34,6 +26,14 @@ class ColliderCircle {
 
 class AsteroidTag {
   const AsteroidTag();
+}
+
+enum AsteroidKind { normal, gold }
+
+class AsteroidKindComponent {
+  const AsteroidKindComponent({required this.kind});
+
+  final AsteroidKind kind;
 }
 
 class AsteroidVisual {
@@ -60,6 +60,7 @@ class RunStats {
     this.escaped = 0,
     this.hits = 0,
     this.misses = 0,
+    this.hitScore = 0,
     this.score = 0,
     this.spawnCooldown = Duration.zero,
     this.difficultyMultiplier = 1,
@@ -70,6 +71,7 @@ class RunStats {
   int escaped;
   int hits;
   int misses;
+  int hitScore;
   int score;
   Duration spawnCooldown;
   double difficultyMultiplier;
@@ -93,16 +95,19 @@ class ParticlesRequested {
     required this.x,
     required this.y,
     required this.kind,
+    required this.asteroidKind,
   });
 
   final double x;
   final double y;
   final String kind;
+  final AsteroidKind asteroidKind;
 }
 
 class EcsWorld implements World {
   final Set<EntityId> _entities = <EntityId>{};
-  final Map<Type, Map<EntityId, Object>> _byType = <Type, Map<EntityId, Object>>{};
+  final Map<Type, Map<EntityId, Object>> _byType =
+      <Type, Map<EntityId, Object>>{};
   EntityId _nextId = 1;
 
   @override
@@ -132,7 +137,10 @@ class EcsWorld implements World {
     if (!_entities.contains(entity)) {
       throw StateError('Entity $entity does not exist.');
     }
-    _byType.putIfAbsent(component.runtimeType, () => <EntityId, Object>{})[entity] = component;
+    _byType.putIfAbsent(
+      component.runtimeType,
+      () => <EntityId, Object>{},
+    )[entity] = component;
   }
 
   @override

@@ -77,11 +77,7 @@ class RenderFrame {
   final UiState uiState;
 }
 
-enum ShapeKind {
-  circle,
-  polygon,
-  line,
-}
+enum ShapeKind { circle, polygon, line }
 
 class Vec2 {
   const Vec2(this.x, this.y);
@@ -95,12 +91,16 @@ class ShapeModel {
     required this.position,
     required this.alpha,
     required this.radius,
+    this.strokeColorArgb,
+    this.fillColorArgb,
   }) : kind = ShapeKind.circle,
        points = const <Vec2>[];
 
   const ShapeModel.polygon({
     required this.points,
     required this.alpha,
+    this.strokeColorArgb,
+    this.fillColorArgb,
   }) : kind = ShapeKind.polygon,
        position = const Vec2(0, 0),
        radius = 0;
@@ -108,6 +108,8 @@ class ShapeModel {
   const ShapeModel.line({
     required this.points,
     required this.alpha,
+    this.strokeColorArgb,
+    this.fillColorArgb,
   }) : kind = ShapeKind.line,
        position = const Vec2(0, 0),
        radius = 0;
@@ -117,6 +119,8 @@ class ShapeModel {
   final List<Vec2> points;
   final double radius;
   final double alpha;
+  final int? strokeColorArgb;
+  final int? fillColorArgb;
 }
 
 class HudModel {

@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:asteroids_core/core.dart';
 import 'package:test/test.dart';
 
@@ -89,7 +91,8 @@ class DummyStorage implements Storage {
 class DummyWorld implements World {
   int _nextId = 1;
   final Set<EntityId> _entities = <EntityId>{};
-  final Map<Type, Map<EntityId, Object>> _byType = <Type, Map<EntityId, Object>>{};
+  final Map<Type, Map<EntityId, Object>> _byType =
+      <Type, Map<EntityId, Object>>{};
 
   @override
   Iterable<EntityId> get entities => _entities;
@@ -115,7 +118,10 @@ class DummyWorld implements World {
 
   @override
   void attachComponent(EntityId entity, Object component) {
-    _byType.putIfAbsent(component.runtimeType, () => <EntityId, Object>{})[entity] = component;
+    _byType.putIfAbsent(
+      component.runtimeType,
+      () => <EntityId, Object>{},
+    )[entity] = component;
   }
 
   @override
@@ -278,8 +284,16 @@ void main() {
       final rngA = DummyRng(7);
       final rngB = DummyRng(7);
 
-      final seqA = <int>[rngA.nextInt(100), rngA.nextInt(100), rngA.nextInt(100)];
-      final seqB = <int>[rngB.nextInt(100), rngB.nextInt(100), rngB.nextInt(100)];
+      final seqA = <int>[
+        rngA.nextInt(100),
+        rngA.nextInt(100),
+        rngA.nextInt(100),
+      ];
+      final seqB = <int>[
+        rngB.nextInt(100),
+        rngB.nextInt(100),
+        rngB.nextInt(100),
+      ];
 
       expect(seqA, seqB);
     });
@@ -344,7 +358,10 @@ void main() {
       expect(engine.state, GameLifecycleState.running);
       eventBus.publish(const GameQuitRequested());
       expect(engine.state, GameLifecycleState.quit);
-      expect(eventBus.publishedEvents.whereType<GameStateChanged>(), isNotEmpty);
+      expect(
+        eventBus.publishedEvents.whereType<GameStateChanged>(),
+        isNotEmpty,
+      );
     });
   });
 
@@ -354,7 +371,11 @@ void main() {
       final clock = DummyClock(2_000);
       final world = EcsWorld();
       final mode = ClassicMode(
-        config: const ClassicConfig(width: 800, height: 600, spawnCooldown: Duration.zero),
+        config: const ClassicConfig(
+          width: 800,
+          height: 600,
+          spawnCooldown: Duration.zero,
+        ),
       );
       final engine = GameEngine(
         clock: clock,
@@ -371,7 +392,10 @@ void main() {
       expect(asteroidsAfterSpawn.length, 1);
       expect(eventBus.publishedEvents.whereType<AsteroidSpawned>().length, 1);
       expect(mode.lastFrame.shapes, isNotEmpty);
-      expect(eventBus.publishedEvents.whereType<RenderFrameReady>(), isNotEmpty);
+      expect(
+        eventBus.publishedEvents.whereType<RenderFrameReady>(),
+        isNotEmpty,
+      );
 
       final asteroid = asteroidsAfterSpawn.single;
       final t = world.getComponent<Transform>(asteroid)!;
@@ -380,25 +404,204 @@ void main() {
           t.x <= -c.r || t.x >= 800 + c.r || t.y <= -c.r || t.y >= 600 + c.r;
       expect(spawnedOutside, isTrue);
       eventBus.publish(
-        InputPointerDown(
-          x: t.x,
-          y: t.y,
-          timestampMs: clock.nowMs,
-        ),
+        InputPointerDown(x: t.x, y: t.y, timestampMs: clock.nowMs),
       );
       engine.update(const Duration(milliseconds: 16));
 
       expect(world.query(<Type>[AsteroidTag]), isEmpty);
       expect(eventBus.publishedEvents.whereType<AsteroidDestroyed>().length, 1);
-      expect(eventBus.publishedEvents.whereType<ParticlesRequested>().length, 1);
+      expect(
+        eventBus.publishedEvents.whereType<ParticlesRequested>().length,
+        1,
+      );
       expect(eventBus.publishedEvents.whereType<StatsUpdated>(), isNotEmpty);
+    });
+
+    test('gold spawn uses min radius and max speed for current difficulty', () {
+      final eventBus = DummyEventBus();
+      final world = EcsWorld();
+      const config = ClassicConfig(
+        width: 800,
+        height: 600,
+        spawnCooldown: Duration.zero,
+        goldSpawnChance: 1.0,
+        goldSpeedMultiplier: 1.20,
+      );
+      final mode = ClassicMode(config: config);
+      final engine = GameEngine(
+        clock: DummyClock(5_000),
+        rng: SeededRng(123),
+        storage: DummyStorage(),
+        eventBus: eventBus,
+        world: world,
+        mode: mode,
+      );
+      eventBus.publish(const GameStartRequested());
+      engine.update(const Duration(milliseconds: 16));
+
+      final asteroid = world.query(<Type>[AsteroidTag]).single;
+      final kind = world.getComponent<AsteroidKindComponent>(asteroid);
+      final collider = world.getComponent<ColliderCircle>(asteroid)!;
+      final velocity = world.getComponent<Velocity>(asteroid)!;
+      final speed = math.sqrt(
+        (velocity.vx * velocity.vx) + (velocity.vy * velocity.vy),
+      );
+      const expectedDifficulty = 2.0; // speed level default 3 -> base 2.0
+      final expectedMaxSpeed =
+          config.baseAsteroidSpeed *
+          expectedDifficulty *
+          (1 + config.asteroidSpeedJitter) *
+          config.goldSpeedMultiplier;
+
+      expect(kind?.kind, AsteroidKind.gold);
+      expect(collider.r, closeTo(config.asteroidRadiusMin, 0.0001));
+      expect(speed, closeTo(expectedMaxSpeed, 0.0001));
+    });
+
+    test('gold chance 0 produces normal asteroid', () {
+      final eventBus = DummyEventBus();
+      final world = EcsWorld();
+      final mode = ClassicMode(
+        config: const ClassicConfig(
+          width: 640,
+          height: 480,
+          spawnCooldown: Duration.zero,
+          goldSpawnChance: 0.0,
+        ),
+      );
+      final engine = GameEngine(
+        clock: DummyClock(6_000),
+        rng: SeededRng(222),
+        storage: DummyStorage(),
+        eventBus: eventBus,
+        world: world,
+        mode: mode,
+      );
+      eventBus.publish(const GameStartRequested());
+      engine.update(const Duration(milliseconds: 16));
+
+      final asteroid = world.query(<Type>[AsteroidTag]).single;
+      final kind = world.getComponent<AsteroidKindComponent>(asteroid);
+      expect(kind?.kind, AsteroidKind.normal);
+    });
+
+    test('gold hit adds 1000 hitScore and updates total score', () {
+      final eventBus = DummyEventBus();
+      final world = EcsWorld();
+      final clock = DummyClock(7_000);
+      final mode = ClassicMode(
+        config: const ClassicConfig(
+          width: 640,
+          height: 480,
+          spawnCooldown: Duration.zero,
+          goldSpawnChance: 1.0,
+          goldScorePerHit: 1000,
+        ),
+      );
+      final engine = GameEngine(
+        clock: clock,
+        rng: SeededRng(333),
+        storage: DummyStorage(),
+        eventBus: eventBus,
+        world: world,
+        mode: mode,
+      );
+      eventBus.publish(const GameStartRequested());
+      engine.update(const Duration(milliseconds: 16));
+
+      final asteroid = world.query(<Type>[AsteroidTag]).single;
+      final t = world.getComponent<Transform>(asteroid)!;
+      eventBus.publish(
+        InputPointerDown(x: t.x, y: t.y, timestampMs: clock.nowMs),
+      );
+      engine.update(const Duration(milliseconds: 16));
+
+      final runEntity = world.query(<Type>[RunStats]).single;
+      final stats = world.getComponent<RunStats>(runEntity)!;
+      final destroyedEvent = eventBus.publishedEvents
+          .whereType<AsteroidDestroyed>()
+          .last;
+      expect(destroyedEvent.kind, AsteroidKind.gold);
+      expect(stats.hitScore, 1000);
+      expect(stats.score, 1000);
+    });
+
+    test('normal hit keeps default 100 hitScore', () {
+      final eventBus = DummyEventBus();
+      final world = EcsWorld();
+      final clock = DummyClock(8_000);
+      final mode = ClassicMode(
+        config: const ClassicConfig(
+          width: 640,
+          height: 480,
+          spawnCooldown: Duration.zero,
+          goldSpawnChance: 0.0,
+        ),
+      );
+      final engine = GameEngine(
+        clock: clock,
+        rng: SeededRng(444),
+        storage: DummyStorage(),
+        eventBus: eventBus,
+        world: world,
+        mode: mode,
+      );
+      eventBus.publish(const GameStartRequested());
+      engine.update(const Duration(milliseconds: 16));
+
+      final asteroid = world.query(<Type>[AsteroidTag]).single;
+      final t = world.getComponent<Transform>(asteroid)!;
+      eventBus.publish(
+        InputPointerDown(x: t.x, y: t.y, timestampMs: clock.nowMs),
+      );
+      engine.update(const Duration(milliseconds: 16));
+
+      final runEntity = world.query(<Type>[RunStats]).single;
+      final stats = world.getComponent<RunStats>(runEntity)!;
+      final destroyedEvent = eventBus.publishedEvents
+          .whereType<AsteroidDestroyed>()
+          .last;
+      expect(destroyedEvent.kind, AsteroidKind.normal);
+      expect(stats.hitScore, 100);
+      expect(stats.score, 100);
+    });
+
+    test('gold render uses configured border color', () {
+      final eventBus = DummyEventBus();
+      final world = EcsWorld();
+      final mode = ClassicMode(
+        config: const ClassicConfig(
+          width: 640,
+          height: 480,
+          spawnCooldown: Duration.zero,
+          goldSpawnChance: 1.0,
+          goldBorderColorArgb: 0xFFFFD700,
+        ),
+      );
+      final engine = GameEngine(
+        clock: DummyClock(9_000),
+        rng: SeededRng(555),
+        storage: DummyStorage(),
+        eventBus: eventBus,
+        world: world,
+        mode: mode,
+      );
+      eventBus.publish(const GameStartRequested());
+      engine.update(const Duration(milliseconds: 16));
+
+      expect(mode.lastFrame.shapes, isNotEmpty);
+      expect(mode.lastFrame.shapes.single.strokeColorArgb, 0xFFFFD700);
     });
 
     test('escape system despawns out-of-bounds asteroid and tracks stats', () {
       final eventBus = DummyEventBus();
       final world = EcsWorld();
       final mode = ClassicMode(
-        config: const ClassicConfig(width: 100, height: 100, spawnCooldown: Duration(hours: 1)),
+        config: const ClassicConfig(
+          width: 100,
+          height: 100,
+          spawnCooldown: Duration(hours: 1),
+        ),
       );
       final engine = GameEngine(
         clock: DummyClock(3_000),
@@ -425,21 +628,22 @@ void main() {
     test('loads and saves lastResult via storage', () async {
       final eventBus = DummyEventBus();
       final storage = DummyStorage();
-      await storage.write(
-        ClassicMode.lastResultStorageKey,
-        <String, Object>{
-          'spawned': 2,
-          'escaped': 1,
-          'hits': 3,
-          'misses': 4,
-          'score': 30,
-          'difficultyMultiplier': 1.0,
-          'timeMs': 5000,
-        },
-      );
+      await storage.write(ClassicMode.lastResultStorageKey, <String, Object>{
+        'spawned': 2,
+        'escaped': 1,
+        'hits': 3,
+        'misses': 4,
+        'score': 30,
+        'difficultyMultiplier': 1.0,
+        'timeMs': 5000,
+      });
 
       final mode = ClassicMode(
-        config: const ClassicConfig(width: 100, height: 100, spawnCooldown: Duration.zero),
+        config: const ClassicConfig(
+          width: 100,
+          height: 100,
+          spawnCooldown: Duration.zero,
+        ),
       );
       final engine = GameEngine(
         clock: DummyClock(10_000),
@@ -471,7 +675,11 @@ void main() {
         final clock = DummyClock(1_000);
         final storage = DummyStorage();
         final mode = ClassicMode(
-          config: const ClassicConfig(width: 300, height: 500, spawnCooldown: Duration.zero),
+          config: const ClassicConfig(
+            width: 300,
+            height: 500,
+            spawnCooldown: Duration.zero,
+          ),
         );
         final engine = GameEngine(
           clock: clock,
@@ -487,11 +695,7 @@ void main() {
         final asteroid = engine.world.query(<Type>[AsteroidTag]).single;
         final t = engine.world.getComponent<Transform>(asteroid)!;
         eventBus.publish(
-          InputPointerDown(
-            x: t.x,
-            y: t.y,
-            timestampMs: clock.nowMs,
-          ),
+          InputPointerDown(x: t.x, y: t.y, timestampMs: clock.nowMs),
         );
         engine.update(const Duration(milliseconds: 16));
 
@@ -507,7 +711,12 @@ void main() {
           hits: (saved['hits'] as num).toInt(),
           misses: (saved['misses'] as num).toInt(),
           score: (saved['score'] as num).toInt(),
-          difficultyMultiplier: (saved['difficultyMultiplier'] as num).toDouble(),
+          difficultyMultiplier: (saved['difficultyMultiplier'] as num)
+              .toDouble(),
+          speedLevelAtStart: ((saved['speedLevelAtStart'] as num?) ?? 3)
+              .toInt(),
+          difficultyAdaptiveAtStart:
+              (saved['difficultyAdaptiveAtStart'] as bool?) ?? true,
           time: Duration(milliseconds: (saved['timeMs'] as num).toInt()),
           paused: false,
         );
@@ -526,40 +735,58 @@ void main() {
       expect(first.time, second.time);
     });
 
-    test('hit: pointer over asteroid => AsteroidDestroyed; outside => HitMissed', () {
-      final eventBus = DummyEventBus();
-      final clock = DummyClock(2_000);
-      final mode = ClassicMode(
-        config: const ClassicConfig(width: 300, height: 500, spawnCooldown: Duration.zero),
-      );
-      final engine = GameEngine(
-        clock: clock,
-        rng: SeededRng(77),
-        storage: DummyStorage(),
-        eventBus: eventBus,
-        world: EcsWorld(),
-        mode: mode,
-      );
+    test(
+      'hit: pointer over asteroid => AsteroidDestroyed; outside => HitMissed',
+      () {
+        final eventBus = DummyEventBus();
+        final clock = DummyClock(2_000);
+        final mode = ClassicMode(
+          config: const ClassicConfig(
+            width: 300,
+            height: 500,
+            spawnCooldown: Duration.zero,
+          ),
+        );
+        final engine = GameEngine(
+          clock: clock,
+          rng: SeededRng(77),
+          storage: DummyStorage(),
+          eventBus: eventBus,
+          world: EcsWorld(),
+          mode: mode,
+        );
 
-      eventBus.publish(const GameStartRequested());
-      engine.update(const Duration(milliseconds: 16));
-      final asteroid = engine.world.query(<Type>[AsteroidTag]).single;
-      final t = engine.world.getComponent<Transform>(asteroid)!;
+        eventBus.publish(const GameStartRequested());
+        engine.update(const Duration(milliseconds: 16));
+        final asteroid = engine.world.query(<Type>[AsteroidTag]).single;
+        final t = engine.world.getComponent<Transform>(asteroid)!;
 
-      eventBus.publish(InputPointerDown(x: t.x, y: t.y, timestampMs: clock.nowMs));
-      engine.update(const Duration(milliseconds: 16));
+        eventBus.publish(
+          InputPointerDown(x: t.x, y: t.y, timestampMs: clock.nowMs),
+        );
+        engine.update(const Duration(milliseconds: 16));
 
-      eventBus.publish(InputPointerDown(x: 9999, y: 9999, timestampMs: clock.nowMs));
-      engine.update(const Duration(milliseconds: 16));
+        eventBus.publish(
+          InputPointerDown(x: 9999, y: 9999, timestampMs: clock.nowMs),
+        );
+        engine.update(const Duration(milliseconds: 16));
 
-      expect(eventBus.publishedEvents.whereType<AsteroidDestroyed>(), isNotEmpty);
-      expect(eventBus.publishedEvents.whereType<HitMissed>(), isNotEmpty);
-    });
+        expect(
+          eventBus.publishedEvents.whereType<AsteroidDestroyed>(),
+          isNotEmpty,
+        );
+        expect(eventBus.publishedEvents.whereType<HitMissed>(), isNotEmpty);
+      },
+    );
 
     test('escape: ticks until asteroid leaves bounds => AsteroidEscaped', () {
       final eventBus = DummyEventBus();
       final mode = ClassicMode(
-        config: const ClassicConfig(width: 120, height: 120, spawnCooldown: Duration.zero),
+        config: const ClassicConfig(
+          width: 120,
+          height: 120,
+          spawnCooldown: Duration.zero,
+        ),
       );
       final engine = GameEngine(
         clock: DummyClock(3_000),
@@ -583,7 +810,11 @@ void main() {
       final storage = DummyStorage();
       final eventBus = DummyEventBus();
       final mode = ClassicMode(
-        config: const ClassicConfig(width: 200, height: 200, spawnCooldown: Duration.zero),
+        config: const ClassicConfig(
+          width: 200,
+          height: 200,
+          spawnCooldown: Duration.zero,
+        ),
       );
       final engine = GameEngine(
         clock: DummyClock(4_000),

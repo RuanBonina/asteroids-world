@@ -1,13 +1,9 @@
 library;
 
 import 'contracts.dart';
+import 'ecs.dart';
 
-enum GameLifecycleState {
-  idle,
-  running,
-  paused,
-  quit,
-}
+enum GameLifecycleState { idle, running, paused, quit }
 
 class InputPointerDown {
   const InputPointerDown({
@@ -62,10 +58,7 @@ class RenderFrameReady {
 }
 
 class GameStateChanged {
-  const GameStateChanged({
-    required this.previous,
-    required this.current,
-  });
+  const GameStateChanged({required this.previous, required this.current});
 
   final GameLifecycleState previous;
   final GameLifecycleState current;
@@ -76,11 +69,13 @@ class AsteroidDestroyed {
     required this.entity,
     required this.x,
     required this.y,
+    required this.kind,
   });
 
   final EntityId entity;
   final double x;
   final double y;
+  final AsteroidKind kind;
 }
 
 class HitMissed {
@@ -109,6 +104,8 @@ class RunStatsSnapshot {
     required this.misses,
     required this.score,
     required this.difficultyMultiplier,
+    required this.speedLevelAtStart,
+    required this.difficultyAdaptiveAtStart,
     required this.time,
     required this.paused,
   });
@@ -119,6 +116,8 @@ class RunStatsSnapshot {
   final int misses;
   final int score;
   final double difficultyMultiplier;
+  final int speedLevelAtStart;
+  final bool difficultyAdaptiveAtStart;
   final Duration time;
   final bool paused;
 }
